@@ -1,7 +1,7 @@
 from langchain_community.document_loaders import GitLoader
 from pydantic import BaseModel
 from pydantic_string_url import HttpUrl
-from os import path
+from pathlib import path
 import shutil
 from file_filters import codebase_file_filter
 
