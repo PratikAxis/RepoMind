@@ -1,5 +1,5 @@
 from langchain_community.vectorstores import Chroma
-from embedding import model
+from configs.embedding import model
 
 def init_vector_store(docs):
     texts = [doc.page_content for doc in docs]

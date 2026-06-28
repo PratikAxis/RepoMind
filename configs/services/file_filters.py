@@ -1,5 +1,3 @@
-
-
 def codebase_file_filter(file_path: str) -> bool:
     allowed_extensions = (
         ".py", ".js", ".ts", ".jsx", ".tsx",
