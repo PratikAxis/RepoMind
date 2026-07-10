@@ -1,4 +1,3 @@
-from langchain_community import vectorstores
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
@@ -36,3 +35,5 @@ def response_generator(vector_store):
         | llm
         | StrOutputParser()
     )
+    
+    return rag_chain

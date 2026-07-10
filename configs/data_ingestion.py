@@ -1,8 +1,7 @@
 from langchain_community.document_loaders import GitLoader
-from pydantic import BaseModel
-from pydantic_string_url import HttpUrl
+from pydantic import BaseModel, HttpUrl
 from pathlib import Path
-from services.file_filters import codebase_file_filter
+from configs.services.file_filters import codebase_file_filter
 from git import GitCommandError 
 
 class Source(BaseModel):

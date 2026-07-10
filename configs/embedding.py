@@ -1,9 +1,4 @@
-from chunking import text_chunks
-from sentence_transformers import SentenceTransformer   
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-chunks = text_chunks()
-
-def chunk_embed(chunks):
-    embedded_chunks = model.encode(chunks) 
-    return embedded_chunks  
+def get_embedding_model():
+    return HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
