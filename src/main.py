@@ -20,7 +20,7 @@ class QueryRequest(BaseModel):
     question: str
 
 @app.post("/ingest")
-def ingest_repo(request: IngestRequest):
+async def ingest_repo(request: IngestRequest):
     try:
         # 1. Data Ingestion
         if request.source_type == "local":
@@ -58,7 +58,7 @@ def ingest_repo(request: IngestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/query")
-def query_repo(request: QueryRequest):
+async def query_repo(request: QueryRequest):
     if not hasattr(app.state, "rag_chain") or app.state.rag_chain is None:
         raise HTTPException(status_code=400, detail="RAG chain not initialized. Please call /ingest first.")
     
@@ -67,5 +67,10 @@ def query_repo(request: QueryRequest):
         response = app.state.rag_chain.invoke(request.question)
         return {"question": request.question, "answer": response}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        if "Connection refused" in error_msg or "ConnectError" in error_msg:
+            raise HTTPException(status_code=503, detail="Could not connect to Ollama. Please ensure Ollama is running and accessible at localhost:11434.")
+        if "not found" in error_msg.lower() and "model" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=f"Ollama model not found. Please pull the required model (e.g., 'ollama pull phi3:mini'). Error: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
 

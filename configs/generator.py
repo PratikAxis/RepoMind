@@ -8,7 +8,7 @@ def retrival(vector_db):
     return "\n\n".join(doc.page_content for doc in vector_db)
 
 llm = ChatOllama(
-    model="phi-4-mini", 
+    model="phi3:mini", 
     temperature=0.7,
     base_url="http://localhost:11434"
 )
