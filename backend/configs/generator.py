@@ -23,13 +23,23 @@ def response_generator(vector_store):
             "question": RunnablePassthrough()
         }
         | ChatPromptTemplate.from_template(
-            """You are a coding assistant. Use the following code context to answer the question.
-            If the answer is not in the context, say "I don't know".
+            """You are a codebase assistant.
+
+            Answer ONLY from the provided context.
+
+            Rules:
+            - Never use outside knowledge.
+            - Never guess.
+            - If the answer is not supported by the context, reply:
+            "I couldn't find this information in the provided codebase context."
+            - Mention the relevant file or function whenever possible.
 
             Context:
             {context}
 
-            Question: {question}
+            Question:
+            {question}
+
             Answer:"""
         )
         | llm

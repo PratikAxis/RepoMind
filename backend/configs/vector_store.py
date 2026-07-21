@@ -12,5 +12,5 @@ def init_vector_store(chunks, embedding_model):
     )
     
     vector_db.add_texts(texts=texts, metadatas=metadatas)
-    
+
     return vector_db
