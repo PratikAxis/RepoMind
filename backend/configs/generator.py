@@ -9,13 +9,13 @@ def retrival(vector_db):
 
 llm = ChatOllama(
     model="phi3:mini", 
-    temperature=0.7,
+    temperature=0,
     base_url="http://localhost:11434"
 )
 
 def response_generator(vector_store):
 
-    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
     rag_chain = (
         {
