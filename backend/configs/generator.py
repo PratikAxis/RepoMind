@@ -23,24 +23,28 @@ def response_generator(vector_store):
             "question": RunnablePassthrough()
         }
         | ChatPromptTemplate.from_template(
-            """You are a codebase assistant.
+            """You are answering questions about a software repository.
 
-            Answer ONLY from the provided context.
+                Use ONLY the retrieved context.
 
-            Rules:
-            - Never use outside knowledge.
-            - Never guess.
-            - If the answer is not supported by the context, reply:
-            "I couldn't find this information in the provided codebase context."
-            - Mention the relevant file or function whenever possible.
+                Rules:
 
-            Context:
-            {context}
+                - Never use outside knowledge.
+                - Never assume missing implementation details.
+                - Never write "likely", "probably", "assume", or similar speculative language.
+                - If the retrieved context does not contain enough information, reply:
 
-            Question:
-            {question}
+                "I couldn't find enough information in the retrieved codebase context."
 
-            Answer:"""
+                - When answering, explicitly reference the relevant file or function whenever possible.
+
+                Context:
+                {context}
+
+                Question:
+                {question}
+
+                Answer:"""
         )
         | llm
         | StrOutputParser()
