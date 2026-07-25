@@ -1,3 +1,4 @@
+import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
@@ -7,11 +8,15 @@ from langchain_ollama import ChatOllama
 def retrival(vector_db):
     return "\n\n".join(doc.page_content for doc in vector_db)
 
+ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+ollama_model = os.getenv("OLLAMA_MODEL", "phi3:mini")
+
 llm = ChatOllama(
-    model="phi3:mini", 
+    model=ollama_model, 
     temperature=0,
-    base_url="http://localhost:11434"
+    base_url=ollama_base_url
 )
+
 
 def response_generator(vector_store):
 

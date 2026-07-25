@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.configs.data_ingestion import load_remote_repo, load_local_repo
 from backend.configs.chunking import text_chunks
@@ -9,6 +10,21 @@ from backend.configs.vector_store import init_vector_store
 from backend.configs.generator import response_generator
 
 app = FastAPI(title="RepoMind RAG API", description="API to ingest codebases and query them using RAG.")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "RepoMind Backend"}
+
+
 
 class IngestRequest(BaseModel):
     source_type: str  
