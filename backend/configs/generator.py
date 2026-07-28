@@ -42,6 +42,8 @@ def response_generator(vector_store):
                 "I couldn't find enough information in the retrieved codebase context."
 
                 - When answering, explicitly reference the relevant file or function whenever possible.
+                - try to give the shorter answers but enough
+                - If required show some flow of steps visualy
 
                 Context:
                 {context}

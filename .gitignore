@@ -1,1 +1,6 @@
-repo_ChromaDB/chroma.sqlite3
+#V. Environment
+.venv/
+
+#DB
+**/repo_ChromaDB/
+**/*.sqlite3
