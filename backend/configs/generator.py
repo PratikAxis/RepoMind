@@ -2,19 +2,16 @@ import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 
 
 def retrival(vector_db):
     return "\n\n".join(doc.page_content for doc in vector_db)
 
-ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-ollama_model = os.getenv("OLLAMA_MODEL", "phi3:mini")
-
-llm = ChatOllama(
-    model=ollama_model, 
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
     temperature=0,
-    base_url=ollama_base_url
+    groq_api_key=os.getenv("GROQ_API_KEY")
 )
 
 
