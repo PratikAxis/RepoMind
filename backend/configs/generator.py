@@ -73,6 +73,7 @@ def response_generator(vector_store, llm_instance=None):
                 - Never make up specific variable names or file structures that are not in the context.
                 - When answering, explicitly reference the relevant file or function from the context whenever possible.
                 - Keep the answer concise, accurate, and direct.
+                - try to give the shorter answer by providin the response in less words if youser didnt ask for it.
 
                 Context:
                 {context}
