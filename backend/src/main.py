@@ -30,6 +30,25 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "RepoMind Backend"}
 
+@app.get("/debug")
+async def debug():
+    import sqlite3
+    import sys
+    import os
+    try:
+        import chromadb
+        chroma_ver = chromadb.__version__
+    except Exception as e:
+        chroma_ver = str(e)
+    return {
+        "python_version": sys.version,
+        "sqlite_version": sqlite3.sqlite_version,
+        "sqlite_path": sqlite3.__file__,
+        "chromadb_version": chroma_ver,
+        "sys_path": sys.path,
+        "cwd": os.getcwd(),
+    }
+
 
 
 class IngestRequest(BaseModel):
@@ -103,6 +122,8 @@ async def ingest_repo(request: IngestRequest):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/query")
@@ -115,6 +136,8 @@ async def query_repo(request: QueryRequest):
         response = app.state.rag_chain.invoke(request.question)
         return {"question": request.question, "answer": response}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         error_msg = str(e)
         if _is_provider_auth_error(e) or _is_provider_config_error(e):
             raise HTTPException(status_code=503, detail=f"Groq is not configured correctly. Please verify GROQ_API_KEY. Error: {error_msg}")
