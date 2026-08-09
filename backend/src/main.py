@@ -76,6 +76,16 @@ async def ingest_repo(request: IngestRequest):
         # 3. Embedding initialization
         embedding_model = get_embedding_model()
 
+        # Close any existing vector store connection to avoid SQLite database locks
+        if hasattr(app.state, "vector_store") and app.state.vector_store is not None:
+            try:
+                app.state.vector_store._client.close()
+            except Exception:
+                pass
+            app.state.vector_store = None
+            import gc
+            gc.collect()
+
         # 4. Vector Store setup
         vector_store = init_vector_store(chunks, embedding_model)
         

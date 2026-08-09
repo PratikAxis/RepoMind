@@ -21,4 +21,4 @@ def test_query_returns_503_for_authentication_errors():
     response = client.post("/query", json={"question": "hello"})
 
     assert response.status_code == 503
-    assert "provider" in response.json()["detail"].lower()
+    assert "groq" in response.json()["detail"].lower()

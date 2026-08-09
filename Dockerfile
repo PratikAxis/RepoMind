@@ -7,9 +7,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl && rm 
 COPY backend/requirements.txt /app/backend/requirements.txt
 COPY frontend/requirements.txt /app/frontend/requirements.txt
 
-# Install PyTorch CPU-only first to avoid massive CUDA downloads and keep image lightweight
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt -r /app/frontend/requirements.txt
 
 COPY backend /app/backend
