@@ -4,3 +4,8 @@
 #DB
 **/repo_ChromaDB/
 **/*.sqlite3
+
+# Local env and python artifacts
+.env
+__pycache__/
+*.pyc

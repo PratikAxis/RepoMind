@@ -1,5 +1,8 @@
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -10,7 +13,7 @@ from backend.configs.data_ingestion import load_remote_repo, load_local_repo
 from backend.configs.chunking import text_chunks
 from backend.configs.embedding import get_embedding_model
 from backend.configs.vector_store import init_vector_store
-from backend.configs.generator import response_generator
+from backend.configs.generator import response_generator, get_llm
 
 app = FastAPI(title="RepoMind RAG API", description="API to ingest codebases and query them using RAG.")
 
@@ -37,6 +40,19 @@ class IngestRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
+
+def _is_provider_auth_error(error: Exception) -> bool:
+    message = str(error).lower()
+    status_code = getattr(error, "status_code", None)
+    if status_code in {401, 403}:
+        return True
+    return any(token in message for token in ["authentication", "invalid api key", "invalid_api_key", "401", "unauthorized", "forbidden", "api key"])
+
+
+def _is_provider_config_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return any(token in message for token in ["not configured", "groq_api_key", "langchain_groq"])
+
 
 @app.post("/ingest")
 async def ingest_repo(request: IngestRequest):
@@ -65,7 +81,8 @@ async def ingest_repo(request: IngestRequest):
         
         # Save vector store and chain to app state for querying
         app.state.vector_store = vector_store
-        app.state.rag_chain = response_generator(vector_store)
+        app.state.llm = get_llm()
+        app.state.rag_chain = response_generator(vector_store, llm_instance=app.state.llm)
 
         return {
             "message": "Ingestion successful!", 
@@ -89,9 +106,9 @@ async def query_repo(request: QueryRequest):
         return {"question": request.question, "answer": response}
     except Exception as e:
         error_msg = str(e)
-        if "Connection refused" in error_msg or "ConnectError" in error_msg:
-            raise HTTPException(status_code=503, detail="Could not connect to Ollama. Please ensure Ollama is running and accessible at localhost:11434.")
+        if _is_provider_auth_error(e) or _is_provider_config_error(e):
+            raise HTTPException(status_code=503, detail=f"Groq is not configured correctly. Please verify GROQ_API_KEY. Error: {error_msg}")
         if "not found" in error_msg.lower() and "model" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=f"Ollama model not found. Please pull the required model (e.g., 'ollama pull phi3:mini'). Error: {error_msg}")
+            raise HTTPException(status_code=404, detail=f"LLM model not found. Please pull or select a valid model. Error: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
 

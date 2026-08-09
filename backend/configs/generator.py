@@ -1,23 +1,60 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
-from langchain_groq import ChatGroq
+
+try:
+    from langchain_groq import ChatGroq
+except ImportError:  # pragma: no cover - optional dependency
+    ChatGroq = None
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+ENV_PATH = ROOT_DIR / ".env"
+
+
+def _load_env():
+    try:
+        load_dotenv(dotenv_path=ENV_PATH)
+    except Exception:
+        pass
 
 
 def retrival(vector_db):
     return "\n\n".join(doc.page_content for doc in vector_db)
 
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    temperature=0,
-    groq_api_key=os.getenv("GROQ_API_KEY")
-)
+
+def get_llm():
+    _load_env()
+
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        raise RuntimeError("GROQ_API_KEY is not configured.")
+    if ChatGroq is None:
+        raise RuntimeError("langchain_groq is not installed.")
+
+    return ChatGroq(
+        model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+        temperature=0,
+        groq_api_key=groq_api_key,
+    )
 
 
-def response_generator(vector_store):
+llm = None
 
-    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+
+def get_default_llm():
+    global llm
+    if llm is None:
+        llm = get_llm()
+    return llm
+
+
+def response_generator(vector_store, llm_instance=None):
+
+    retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 8})
+    model = llm_instance or get_default_llm()
 
     rag_chain = (
         {
@@ -27,20 +64,15 @@ def response_generator(vector_store):
         | ChatPromptTemplate.from_template(
             """You are answering questions about a software repository.
 
-                Use ONLY the retrieved context.
+                Rely primarily on the retrieved context below to answer the question.
 
                 Rules:
 
-                - Never use outside knowledge.
-                - Never assume missing implementation details.
-                - Never write "likely", "probably", "assume", or similar speculative language.
-                - If the retrieved context does not contain enough information, reply:
-
-                "I couldn't find enough information in the retrieved codebase context."
-
-                - When answering, explicitly reference the relevant file or function whenever possible.
-                - try to give the shorter answers but enough
-                - If required show some flow of steps visualy
+                - If the retrieved context contains the answer or relevant clues, explain it clearly.
+                - If the context does not contain enough information, you can use general programming and software engineering knowledge to explain how it would normally be implemented or configured, but clearly specify what is general knowledge versus what is explicitly present in the codebase.
+                - Never make up specific variable names or file structures that are not in the context.
+                - When answering, explicitly reference the relevant file or function from the context whenever possible.
+                - Keep the answer concise, accurate, and direct.
 
                 Context:
                 {context}
@@ -50,7 +82,7 @@ def response_generator(vector_store):
 
                 Answer:"""
         )
-        | llm
+        | model
         | StrOutputParser()
     )
     

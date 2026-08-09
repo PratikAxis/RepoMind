@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pydantic import BaseModel, HttpUrl
 from pathlib import Path
 from langchain_core.documents import Document
@@ -32,17 +33,22 @@ def resolve_repo_path(path: str) -> Path:
     return candidate
 
 def load_remote_repo(url: str, path: str, branch: str = "main"):
-    repo_path = Path(path)
+    repo_root = Path(path).expanduser().resolve()
+    repo_name = url.rstrip('/').split('/')[-1]
+    if repo_name.endswith('.git'):
+        repo_name = repo_name[:-4]
 
-    if repo_path.exists() and repo_path.is_dir() and any(repo_path.iterdir()):
-        repo_name = url.rstrip('/').split('/')[-1]
-        if repo_name.endswith('.git'):
-            repo_name = repo_name[:-4]
-        repo_path = repo_path / repo_name
+    target_path = repo_root / repo_name
+    if not target_path.exists():
+        try:
+            subprocess.run(["git", "clone", "--branch", branch, url, str(target_path)], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"Git clone failed: {exc.stderr}")
+            return []
 
+    docs = []
     try:
-        docs = []
-        for file_path in repo_path.rglob('*'):
+        for file_path in target_path.rglob('*'):
             if not file_path.is_file():
                 continue
             if not codebase_file_filter(str(file_path)):
@@ -51,7 +57,7 @@ def load_remote_repo(url: str, path: str, branch: str = "main"):
                 content = file_path.read_text(encoding='utf-8')
             except Exception:
                 continue
-            relative_path = file_path.relative_to(repo_path)
+            relative_path = file_path.relative_to(target_path)
             docs.append(Document(page_content=content, metadata={"source": str(relative_path)}))
         return docs
     except Exception as e:

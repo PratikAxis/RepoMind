@@ -2,12 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies (git optional)
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
-COPY backend/src/requirements.txt /app/backend/src/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/src/requirements.txt
+# Install PyTorch CPU-only first to avoid massive CUDA downloads
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-COPY backend /app/backend
+# Install backend Python dependencies
+COPY requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Copy backend source code (including configs)
+COPY . /app/backend
 
 ENV PYTHONPATH=/app:/app/backend
 

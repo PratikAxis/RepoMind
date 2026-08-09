@@ -1,19 +1,26 @@
+version: "3.9"
 services:
-  repomind:
-    build: .
-    container_name: repomind_app
-    network_mode: host
-    
-    volumes:
-      - "/home/pratik/ML and DL projects/RepoMind:/app"
-      - "/home/pratik:/home/pratik"
-      
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: repo_backend
+    ports:
+      - "8001:8000"
     environment:
-      OLLAMA_BASE_URL: http://127.0.0.1:11434
-      OLLAMA_MODEL: phi3:mini
-      BACKEND_URL: http://127.0.0.1:8000
-      
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: repo_frontend
+    ports:
+      - "8502:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    depends_on:
+      - backend
     restart: unless-stopped

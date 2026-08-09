@@ -5,8 +5,8 @@ import streamlit as st
 # ---------- Page Config ----------
 st.set_page_config(
     page_title="RepoMind RAG",
-    page_icon="🔍",
-    layout="centered",
+    page_icon="",
+    layout="wide",
 )
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000").rstrip("/")
@@ -20,57 +20,62 @@ if "ingested_repo" not in st.session_state:
 
 # ---------- Sidebar / Backend Status ----------
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    st.markdown(f"**Backend Endpoint:** `{BACKEND_URL}`")
+    st.header("Configuration")
+    st.caption(f"Backend: {BACKEND_URL}")
     try:
         res = requests.get(f"{BACKEND_URL}/health", timeout=3)
         if res.status_code == 200:
-            st.success("🟢 Backend Connected")
+            st.success("Backend connected")
         else:
-            st.warning(f"🟡 Backend Status Code: {res.status_code}")
+            st.warning(f"Backend returned {res.status_code}")
     except Exception:
-        st.error("🔴 Backend Disconnected")
+        st.error("Backend disconnected")
 
+    st.divider()
     if st.button("Clear History"):
         st.session_state.history = []
         st.session_state.ingested_repo = None
         st.rerun()
 
 # ---------- Title ----------
-st.title("🔍 RepoMind RAG")
-st.caption("Ask questions about your codebase — locally or from a remote repository.")
+st.title("RepoMind")
+st.caption("Ask questions about a repository and get answers from its indexed code context.")
 
 st.divider()
 
 # ---------- Input Section ----------
-st.subheader("1. Choose Repository Source")
+with st.container():
+    st.subheader("1. Choose Repository Source")
 
-source_type_display = st.radio(
-    "Method",
-    options=["Local", "Remote"],
-    horizontal=True,
-    label_visibility="collapsed",
-)
-source_type = source_type_display.lower()  # "local" or "remote", matches IngestRequest
+    source_type_display = st.radio(
+        "Method",
+        options=["Local", "Remote"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    source_type = source_type_display.lower()
 
-path = ""
-url = None
-branch = "main"
+    path = ""
+    url = None
+    branch = "main"
 
-if source_type == "local":
-    path = st.text_input("Local Path", placeholder="e.g. /home/user/my-project")
-    branch = st.text_input("Branch (optional)", value="main")
-else:  # remote
-    path = st.text_input("Path", placeholder="e.g. /destination/folder")
-    url = st.text_input("Repository URL", placeholder="e.g. https://github.com/user/repo.git")
-    branch = st.text_input("Branch (optional)", value="main")
+    if source_type == "local":
+        path = st.text_input("Local Path", placeholder="e.g. /home/user/my-project")
+        branch = st.text_input("Branch (optional)", value="main")
+    else:
+        path = st.text_input("Local Folder", placeholder="e.g. /home/user")
+        url = st.text_input("Repository URL", placeholder="e.g. https://github.com/user/repo.git")
+        branch = st.text_input("Branch (optional)", value="main")
 
-st.subheader("2. Ask Your Question")
-question = st.text_area("Query", placeholder="Type your question about the codebase here...", height=100)
+with st.container():
+    st.subheader("2. Ask a Question")
+    question = st.text_area(
+        "Query",
+        placeholder="Type your question about the codebase here...",
+        height=110,
+    )
 
-st.divider()
-
-submit = st.button("Submit Query", use_container_width=True)
+    submit = st.button("Submit Query", use_container_width=True)
 
 # ---------- Submit Logic ----------
 if submit:
@@ -96,23 +101,25 @@ if submit:
 
         # Check if we need to run /ingest
         if st.session_state.ingested_repo != current_repo_key:
-            with st.spinner("Ingesting codebase context..."):
+            with st.spinner("Preparing the repository context..."):
                 try:
                     ingest_res = requests.post(f"{BACKEND_URL}/ingest", json=ingest_payload, timeout=120)
                     if ingest_res.status_code == 200:
                         data = ingest_res.json()
                         st.session_state.ingested_repo = current_repo_key
-                        st.toast(f"Ingestion successful! Loaded {data.get('documents_loaded', 0)} files, {data.get('chunks_created', 0)} chunks.", icon="✅")
+                        st.success(
+                            f"Repository ready. Loaded {data.get('documents_loaded', 0)} files and {data.get('chunks_created', 0)} chunks."
+                        )
                     else:
                         ingest_success = False
                         detail = ingest_res.json().get("detail", ingest_res.text)
-                        st.error(f"Ingestion Failed ({ingest_res.status_code}): {detail}")
+                        st.error(f"Ingestion failed: {detail}")
                 except Exception as e:
                     ingest_success = False
-                    st.error(f"Failed to connect to backend at {BACKEND_URL}: {str(e)}")
+                    st.error(f"Could not reach the backend at {BACKEND_URL}: {str(e)}")
 
         if ingest_success:
-            with st.spinner("Querying RAG model..."):
+            with st.spinner("Generating the answer..."):
                 try:
                     query_res = requests.post(f"{BACKEND_URL}/query", json=query_payload, timeout=120)
                     if query_res.status_code == 200:
@@ -121,24 +128,27 @@ if submit:
                         st.session_state.history.append((question, answer))
                     else:
                         detail = query_res.json().get("detail", query_res.text)
-                        st.error(f"Query Failed ({query_res.status_code}): {detail}")
+                        st.error(f"Query failed: {detail}")
                 except Exception as e:
-                    st.error(f"Failed to connect to backend at {BACKEND_URL}: {str(e)}")
+                    st.error(f"Could not reach the backend at {BACKEND_URL}: {str(e)}")
 
 # ---------- Output Section ----------
 if st.session_state.history:
-    st.subheader("Output")
+    st.divider()
+    st.subheader("Answer")
     latest_question, latest_answer = st.session_state.history[-1]
 
-    st.markdown("**Your Question:**")
-    st.info(latest_question)
+    st.markdown("**Question**")
+    st.write(latest_question)
 
-    st.markdown("**Response:**")
-    st.success(latest_answer)
+    st.markdown("**Response**")
+    st.text_area("", latest_answer, height=180, label_visibility="collapsed")
 
     if len(st.session_state.history) > 1:
-        with st.expander("Previous Q&A History"):
-            for idx, (q, a) in enumerate(reversed(st.session_state.history[:-1])):
-                st.markdown(f"**Q:** {q}")
-                st.markdown(f"**A:** {a}")
+        with st.expander("Previous questions"):
+            for q, a in reversed(st.session_state.history[:-1]):
+                st.markdown("**Q:**")
+                st.write(q)
+                st.markdown("**A:**")
+                st.write(a)
                 st.divider()
