@@ -15,17 +15,19 @@ def init_vector_store(chunks, embedding_model, persist_directory=None, collectio
         persist_directory = os.path.join(os.getcwd(), 'repo_ChromaDB')
 
     persist_path = Path(persist_directory).expanduser().resolve()
-    if persist_path.exists():
-        try:
-            shutil.rmtree(persist_path)
-        except Exception:
-            for child in persist_path.iterdir():
-                if child.is_file():
-                    child.unlink(missing_ok=True)
-                else:
-                    shutil.rmtree(child, ignore_errors=True)
-            persist_path.mkdir(parents=True, exist_ok=True)
     persist_path.mkdir(parents=True, exist_ok=True)
+
+    # Clean up old collections programmatically using Chroma API instead of deleting database files on disk
+    try:
+        client = chromadb.PersistentClient(path=str(persist_path))
+        for col in client.list_collections():
+            try:
+                client.delete_collection(col.name)
+            except Exception:
+                pass
+        client.close()
+    except Exception:
+        pass
 
     effective_collection_name = f"{collection_name}_{uuid4().hex[:8]}"
 
