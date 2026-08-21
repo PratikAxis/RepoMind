@@ -9,6 +9,8 @@ services:
       - "8001:8000"
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+    volumes:
+      - "/home/pratik/ML and DL projects:/home/pratik/ML and DL projects"
     restart: unless-stopped
 
   frontend:

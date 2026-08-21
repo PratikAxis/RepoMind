@@ -18,7 +18,7 @@ if "history" not in st.session_state:
 if "ingested_repo" not in st.session_state:
     st.session_state.ingested_repo = None
 
-# ---------- Sidebar / Backend Status ----------
+# ---------- Sidebar ----------
 with st.sidebar:
     st.header("Configuration")
     st.caption(f"Backend: {BACKEND_URL}")
@@ -39,34 +39,19 @@ with st.sidebar:
 
 # ---------- Title ----------
 st.title("RepoMind")
-st.caption("Ask questions about a repository and get answers from its indexed code context.")
+st.caption("Ask questions about a GitHub repository and get answers from its indexed code context.")
 
 st.divider()
 
-# ---------- Input Section ----------
+# ---------- Repository Input ----------
 with st.container():
-    st.subheader("1. Choose Repository Source")
+    st.subheader("1. Choose Repository")
 
-    source_type_display = st.radio(
-        "Method",
-        options=["Local", "Remote"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    source_type = source_type_display.lower()
+    url = st.text_input("Repository URL", placeholder="https://github.com/user/repo.git")
+    clone_dir = st.text_input("Clone Directory", placeholder="/tmp/repos", value="/tmp/repos")
+    branch = st.text_input("Branch", value="main")
 
-    path = ""
-    url = None
-    branch = "main"
-
-    if source_type == "local":
-        path = st.text_input("Local Path", placeholder="e.g. /home/user/my-project")
-        branch = st.text_input("Branch (optional)", value="main")
-    else:
-        path = st.text_input("Local Folder", placeholder="e.g. /home/user")
-        url = st.text_input("Repository URL", placeholder="e.g. https://github.com/user/repo.git")
-        branch = st.text_input("Branch (optional)", value="main")
-
+# ---------- Question Input ----------
 with st.container():
     st.subheader("2. Ask a Question")
     question = st.text_area(
@@ -79,36 +64,35 @@ with st.container():
 
 # ---------- Submit Logic ----------
 if submit:
-    if source_type == "local" and not path:
-        st.warning("Please provide the local path.")
-    elif source_type == "remote" and (not path or not url):
-        st.warning("Please provide both the path and the repository URL.")
+    if not url.strip():
+        st.warning("Please provide the repository URL.")
+    elif not clone_dir.strip():
+        st.warning("Please provide a directory to clone the repository into.")
     elif not question.strip():
-        st.warning("Please enter a query.")
+        st.warning("Please enter a question.")
     else:
         ingest_payload = {
-            "source_type": source_type,
-            "path": path,
-            "url": url if source_type == "remote" else None,
+            "url": url,
+            "clone_dir": clone_dir,
             "branch": branch or "main",
         }
-        query_payload = {
-            "question": question,
-        }
+        query_payload = {"question": question}
 
-        current_repo_key = f"{source_type}:{path}:{url}:{branch}"
+        current_repo_key = f"{url}:{branch}"
         ingest_success = True
 
-        # Check if we need to run /ingest
+        # Only re-ingest if the repo/branch changed
         if st.session_state.ingested_repo != current_repo_key:
-            with st.spinner("Preparing the repository context..."):
+            with st.spinner("Cloning and indexing the repository..."):
                 try:
                     ingest_res = requests.post(f"{BACKEND_URL}/ingest", json=ingest_payload, timeout=120)
                     if ingest_res.status_code == 200:
                         data = ingest_res.json()
                         st.session_state.ingested_repo = current_repo_key
                         st.success(
-                            f"Repository ready. Loaded {data.get('documents_loaded', 0)} files and {data.get('chunks_created', 0)} chunks."
+                            f"Repository ready. "
+                            f"Loaded {data.get('documents_loaded', 0)} files, "
+                            f"{data.get('chunks_created', 0)} chunks."
                         )
                     else:
                         ingest_success = False
@@ -116,23 +100,22 @@ if submit:
                         st.error(f"Ingestion failed: {detail}")
                 except Exception as e:
                     ingest_success = False
-                    st.error(f"Could not reach the backend at {BACKEND_URL}: {str(e)}")
+                    st.error(f"Could not reach the backend: {e}")
 
         if ingest_success:
-            with st.spinner("Generating the answer..."):
+            with st.spinner("Generating answer..."):
                 try:
                     query_res = requests.post(f"{BACKEND_URL}/query", json=query_payload, timeout=120)
                     if query_res.status_code == 200:
-                        answer_data = query_res.json()
-                        answer = answer_data.get("answer", "No answer returned.")
+                        answer = query_res.json().get("answer", "No answer returned.")
                         st.session_state.history.append((question, answer))
                     else:
                         detail = query_res.json().get("detail", query_res.text)
                         st.error(f"Query failed: {detail}")
                 except Exception as e:
-                    st.error(f"Could not reach the backend at {BACKEND_URL}: {str(e)}")
+                    st.error(f"Could not reach the backend: {e}")
 
-# ---------- Output Section ----------
+# ---------- Answer Output ----------
 if st.session_state.history:
     st.divider()
     st.subheader("Answer")

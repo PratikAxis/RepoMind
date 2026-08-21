@@ -6,10 +6,9 @@ load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.configs.data_ingestion import load_remote_repo, load_local_repo
+from backend.configs.data_ingestion import load_remote_repo
 from backend.configs.chunking import text_chunks
 from backend.configs.embedding import get_embedding_model
 from backend.configs.vector_store import init_vector_store
@@ -30,11 +29,10 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "RepoMind Backend"}
 
+
 @app.get("/debug")
 async def debug():
-    import sqlite3
-    import sys
-    import os
+    import sqlite3, sys, os
     try:
         import chromadb
         chroma_ver = chromadb.__version__
@@ -43,59 +41,37 @@ async def debug():
     return {
         "python_version": sys.version,
         "sqlite_version": sqlite3.sqlite_version,
-        "sqlite_path": sqlite3.__file__,
         "chromadb_version": chroma_ver,
-        "sys_path": sys.path,
         "cwd": os.getcwd(),
     }
 
 
-
 class IngestRequest(BaseModel):
-    source_type: str  
-    path: str
-    url: Optional[str] = None
+    url: str           # GitHub/GitLab repo URL
+    clone_dir: str     # Local directory to clone the repo into
     branch: str = "main"
+
 
 class QueryRequest(BaseModel):
     question: str
-
-def _is_provider_auth_error(error: Exception) -> bool:
-    message = str(error).lower()
-    status_code = getattr(error, "status_code", None)
-    if status_code in {401, 403}:
-        return True
-    return any(token in message for token in ["authentication", "invalid api key", "invalid_api_key", "401", "unauthorized", "forbidden", "api key"])
-
-
-def _is_provider_config_error(error: Exception) -> bool:
-    message = str(error).lower()
-    return any(token in message for token in ["not configured", "groq_api_key", "langchain_groq"])
 
 
 @app.post("/ingest")
 async def ingest_repo(request: IngestRequest):
     try:
-        # 1. Data Ingestion
-        if request.source_type == "local":
-            docs = load_local_repo(request.path, request.branch)
-        elif request.source_type == "remote":
-            if not request.url:
-                raise HTTPException(status_code=400, detail="URL is required for remote source.")
-            docs = load_remote_repo(request.url, request.path, request.branch)
-        else:
-            raise HTTPException(status_code=400, detail="Invalid source_type. Must be 'local' or 'remote'.")
+        # 1. Clone repo and load documents
+        docs = load_remote_repo(request.url, request.clone_dir, request.branch)
 
         if not docs:
-            raise HTTPException(status_code=404, detail="No documents found or failed to load repository. Check path/url.")
+            raise HTTPException(status_code=404, detail="No documents found. Check the URL and branch.")
 
-        # 2. Chunking
+        # 2. Split into chunks
         chunks = text_chunks(docs)
 
-        # 3. Embedding initialization
+        # 3. Get embedding model
         embedding_model = get_embedding_model()
 
-        # Close any existing vector store connection to avoid SQLite database locks
+        # 4. Close old vector store if any (prevents SQLite lock)
         if hasattr(app.state, "vector_store") and app.state.vector_store is not None:
             try:
                 app.state.vector_store._client.close()
@@ -105,20 +81,18 @@ async def ingest_repo(request: IngestRequest):
             import gc
             gc.collect()
 
-        # 4. Vector Store setup
+        # 5. Build vector store and RAG chain
         vector_store = init_vector_store(chunks, embedding_model)
-        
-        # Save vector store and chain to app state for querying
         app.state.vector_store = vector_store
         app.state.llm = get_llm()
         app.state.rag_chain = response_generator(vector_store, llm_instance=app.state.llm)
 
         return {
-            "message": "Ingestion successful!", 
+            "message": "Ingestion successful!",
             "documents_loaded": len(docs),
-            "chunks_created": len(chunks)
+            "chunks_created": len(chunks),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -126,22 +100,22 @@ async def ingest_repo(request: IngestRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/query")
 async def query_repo(request: QueryRequest):
     if not hasattr(app.state, "rag_chain") or app.state.rag_chain is None:
         raise HTTPException(status_code=400, detail="RAG chain not initialized. Please call /ingest first.")
-    
+
     try:
-        # 5. Generation / Querying
         response = app.state.rag_chain.invoke(request.question)
         return {"question": request.question, "answer": response}
     except Exception as e:
         import traceback
         traceback.print_exc()
         error_msg = str(e)
-        if _is_provider_auth_error(e) or _is_provider_config_error(e):
-            raise HTTPException(status_code=503, detail=f"Groq is not configured correctly. Please verify GROQ_API_KEY. Error: {error_msg}")
-        if "not found" in error_msg.lower() and "model" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=f"LLM model not found. Please pull or select a valid model. Error: {error_msg}")
+        msg_lower = error_msg.lower()
+        if any(t in msg_lower for t in ["authentication", "invalid api key", "401", "unauthorized", "forbidden"]):
+            raise HTTPException(status_code=503, detail=f"Groq API key issue: {error_msg}")
+        if "not found" in msg_lower and "model" in msg_lower:
+            raise HTTPException(status_code=404, detail=f"LLM model not found: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
-
