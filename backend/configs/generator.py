@@ -35,7 +35,7 @@ def get_llm():
         raise RuntimeError("langchain_groq is not installed.")
 
     return ChatGroq(
-        model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+        model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         temperature=0,
         groq_api_key=groq_api_key,
     )
